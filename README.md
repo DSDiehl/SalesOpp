@@ -14,20 +14,21 @@ Another issue is that the data was manually entered by sales personnel. This is 
 The overall purpose, or goal of this analysis is to evaluate the potential of a machine learning model in making a prediction against the data set, specifically if an opportunity will be successful or fail.  Though there are plenty of external factors that can influence contract negotiations with a customer, the curiosity to explore is still necessary.  If there are any patterns that can be discovered or the identification of the most influential features would be helpful to know. This is the purpose of the analysis, to discover any insight no matter how small.
 
 # Exploratory Analysis
-## Image
+!(https://github.com/DSDiehl/SalesOpp/Images/image1.jpg "Logo Title Text 1")
+
 
 The data set contains 77 features and 13,097 samples. Of these samples, there appear to be two distinct categories around the Opportunities. They are 'New Business' and 'Jeopardy'. 
 
-## Image
+!(https://github.com/DSDiehl/SalesOpp/Images/image2.jpg "Logo Title Text 1")
 
 There are also subcategories for OppType which state the results of the opportunity in relation to the OppType. These features are OppTypeNewState (for New Business) and  OppTypeJepState (for Jeopardy)
-## Image
+!(https://github.com/DSDiehl/SalesOpp/Images/image3.jpg "Logo Title Text 1")
 
-## Image
+!(https://github.com/DSDiehl/SalesOpp/Images/image4.jpg "Logo Title Text 1")
 
 The creation dates (OppCreateDate) of each opportunity are also interesting. Though the earliest entry is in 2011, the concentration of opportunities entered into the CRM didn't rise untill 2015.
 
-## Image
+!(https://github.com/DSDiehl/SalesOpp/Images/image5.jpg "Logo Title Text 1")
 
 There is also a category around the Technology being requested to be used in the Opportunity and how a large number of opportunities rely on a certain key number of technologies.
 
