@@ -60,7 +60,7 @@ Another calculation towards Risk is the duration of the Opportunity remaining op
 # Data Refinement
 Now that Preprocessing of data has been completed, there is still some refinement on the data that is required.  The creation of Duration highlighted a missed discovery in EDA that would have shown an issue of Back Dating. Back Dating is the creation of an Opportunity AFTER the results are known. This causes the CloseDate to be Older than the CreateDate which results in negative durations being calculated.  Overall, 3.7% of all Opportunities had a negative duration.
 
-## Image
+![Image1](/Images/image8.jpg)
 
 Based on that small amount a solution was devised to replace the negative durations with a Mean Duration so as not lose the other features related to those samples.  The mean duration turned out to be 282 days.
 
@@ -70,16 +70,16 @@ Columns with missing data were expected since there individual columns were dire
 
 Below is the actual missing data directly related to New Business and identified as being of benefit for the Machine Learning model.
 
-![Image1](/Images/image8.jpg)
-
 
 ![Image1](/Images/image9.jpg)
+
+![Image1](/Images/image10.jpg)
 
 
 # Machine Learning
 After the Cumulative Sum, Opportunity Duration analysis and cleaning up  missing values (NAs), it was time to focus on the New Business data. Currently the data of New Business is split with 44.6% Sold, 30.1% Dead, and 25.2% still active.
 
-![Image1](/Images/image10.jpg)
+![Image1](/Images/image11.jpg)
 
 For the purpose of the Random Forest modeling, the Active and !Active (Sold or Dead) classification data types will need to be separated so the Random Forest model can be created on the !Active.
 
@@ -87,13 +87,13 @@ To conduct a Machine Learning (ML) model, the data set for History must be split
 
 The createDataParition (), from caret library, breaks the original data set into an equal share of Solds and Deads based on the label OppTypeNewState. The reason for this is that any improvement or detrimental of sales techniques over time should not be an influence on the model.
 
-![Image1](/Images/image11.jpg)
-
 ![Image1](/Images/image12.jpg)
+
+![Image1](/Images/image13.jpg)
 
 93% accuracy! This was not originally expected to be doable since it was theorized that there were too many external influences on the success or failure of opportunities to be contained in this data set. External markets fluctuations, production changes, and competition were never made available in the dataset.
 
-![Image1](/Images/image13.jpg)
+![Image1](/Images/image14.jpg)
 
 From the plot above, we can see that after 20 trees, there is no longer a dramatic reduction in error, but there is still a gradual descent.  
 
