@@ -14,32 +14,32 @@ Another issue is that the data was manually entered by sales personnel. This is 
 The overall purpose, or goal of this analysis is to evaluate the potential of a machine learning model in making a prediction against the data set, specifically if an opportunity will be successful or fail.  Though there are plenty of external factors that can influence contract negotiations with a customer, the curiosity to explore is still necessary.  If there are any patterns that can be discovered or the identification of the most influential features would be helpful to know. This is the purpose of the analysis, to discover any insight no matter how small.
 
 # Exploratory Analysis
-!(/Images/image1.jpg)
+![Image](/Images/image1.jpg)
 
 
 The data set contains 77 features and 13,097 samples. Of these samples, there appear to be two distinct categories around the Opportunities. They are 'New Business' and 'Jeopardy'. 
 
-!([alt text]https://github.com/DSDiehl/SalesOpp/Images/image2.jpg "Logo Title Text 1")
+![Image](/Images/image2.jpg)
 
 There are also subcategories for OppType which state the results of the opportunity in relation to the OppType. These features are OppTypeNewState (for New Business) and  OppTypeJepState (for Jeopardy)
-![alt text](https://github.com/DSDiehl/SalesOpp/Images/image3.jpg "Logo Title Text 1")
+![Image1](/Images/image3.jpg)
 
-![alt text](https://github.com/DSDiehl/SalesOpp/Images/image4.jpg "Logo Title Text 1")
+![Image1](/Images/image4.jpg)
 
 The creation dates (OppCreateDate) of each opportunity are also interesting. Though the earliest entry is in 2011, the concentration of opportunities entered into the CRM didn't rise untill 2015.
 
-![alt text](https://github.com/DSDiehl/SalesOpp/Images/image5.jpg "Logo Title Text 1")
+![Image1](/Images/image5.jpg)
 
 There is also a category around the Technology being requested to be used in the Opportunity and how a large number of opportunities rely on a certain key number of technologies.
 
-## Image
+![Image1](/Images/image6.jpg)
 
 # Data Preprocessing
 Being that the data set is a raw extract from a CRM system that was provided as an MS Excel file, there was a lot of preprocessing required to clean the data. This is different from much of the academic data sets that already are clean. Typical issues like empty fields, spaces in column names, incorrect data types and unnecessary columns were many of the hurdles in completing the analysis of this data set.
 
 Another aspect of the preprocessing is preparing the data for a specific Opportunity Type analysis. Earlier in EDA, it was discovered that New Business were the majority of the samples and we wish to refine the Machine Learning to focus on only New Business.
 
-## Image
+![Image1](/Images/image7.jpg)
 
 
 Also discovered during EDA is that New Business has 3 categories; Sold, Dead, and Active. Sold/Dead have Opportunity Close Dates, while Active are currently active opportunities where business is still being negotiated.
@@ -62,7 +62,7 @@ Now that Preprocessing of data has been completed, there is still some refinemen
 
 ## Image
 
-Based on that small amounta solution was devised to replace the negative durations with a Mean Duration so as not lose the other features related to those samples.  The mean duration turned out to be 282 days.
+Based on that small amount a solution was devised to replace the negative durations with a Mean Duration so as not lose the other features related to those samples.  The mean duration turned out to be 282 days.
 
 There was also the issue of missing values peppered across the data set. This had to be handled differently because the missing values were mostly around the categorical data like labeling of Region. 
 
@@ -70,30 +70,30 @@ Columns with missing data were expected since there individual columns were dire
 
 Below is the actual missing data directly related to New Business and identified as being of benefit for the Machine Learning model.
 
-## Image
+![Image1](/Images/image8.jpg)
 
 
-## Image
+![Image1](/Images/image9.jpg)
 
 
 # Machine Learning
 After the Cumulative Sum, Opportunity Duration analysis and cleaning up  missing values (NAs), it was time to focus on the New Business data. Currently the data of New Business is split with 44.6% Sold, 30.1% Dead, and 25.2% still active.
 
-## Image
+![Image1](/Images/image10.jpg)
 
-For the purpose of the Random Forest modeling, the Active and !Active (Sold or Dead) classifcation data types will need to be separated so the Random Forest model can be created on the !Active.
+For the purpose of the Random Forest modeling, the Active and !Active (Sold or Dead) classification data types will need to be separated so the Random Forest model can be created on the !Active.
 
 To conduct a Machine Learning (ML) model, the data set for History must be split into Training and Test datasets. A ratio 70:30 for Train and Test was selected. Exploring the data, features that were numeric or categorical were selected to be used for the ML model. Some categorical data was dropped due to the size of the options, but the Cumulative Sum measurements created from those categories were retained. In the end, 33 of the 94 Columns were selected.
 
-The createDataParition (), from caret library, breaks the original data set into an equal share of Sold’s and Dead’s based on the label OppTypeNewState. The reason for this is that any improvement or detrimental of sales techniques over time should not be an influence on the model.
+The createDataParition (), from caret library, breaks the original data set into an equal share of Solds and Deads based on the label OppTypeNewState. The reason for this is that any improvement or detrimental of sales techniques over time should not be an influence on the model.
 
-## Image
+![Image1](/Images/image11.jpg)
 
-## Image
+![Image1](/Images/image12.jpg)
 
 93% accuracy! This was not originally expected to be doable since it was theorized that there were too many external influences on the success or failure of opportunities to be contained in this data set. External markets fluctuations, production changes, and competition were never made available in the dataset.
 
-## image
+![Image1](/Images/image13.jpg)
 
 From the plot above, we can see that after 20 trees, there is no longer a dramatic reduction in error, but there is still a gradual descent.  
 
