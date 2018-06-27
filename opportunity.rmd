@@ -1,0 +1,404 @@
+---
+title: "Sales Opportunity Data Analysis"
+author: "Marcus Diehl, MSDS 692, Regis University"
+date: "June 23, 2018"
+output: html_document
+#runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:\\Users\\crp1966\\Downloads\\Masters Degree\\DS692\\Project Data\\forGIT\\")   #when in Windows, need to use the // to escape the first /
+#load all the libraries
+library(openxlsx)
+library(dplyr)
+library(data.table)
+library(Amelia)
+library(caret)
+library(randomForest)
+library(DataExplorer)
+library(ggplot2) 
+#read in the data
+opportunity.raw <- read.xlsx("opportunity.masked.xlsx")
+```
+
+# Introduction & Domain
+The data set being presented in this assignment is of Sales Opportunities in relation to a manufacturing company.  Sales Opportunities are leads that have the opportunity to result in a deal or contract with a customer. Typically these opportunities are stored in corporate Customer Relation Management (CRM) systems to help management track the success or failure of a company representative in the sales force.
+
+The data set is a extraction of a live CRM solution, and due to agreements for its use, certain identifiable information were required to be masked before it was released to the public.  The identifiable information includes people, places and products.  The analysis of the data set can still be accomplished as the data is not removed, just replaced with an unique ID which allows categories and classifiers to still function properly.
+
+Another issue is that the data was manually entered by sales personnel. This is noted as it highlights the mistakes that human error introduce.  The majority of the work done in this assignment was in cleaning up the data. This will be highlighted in the Preprocessing section.
+
+# Purpose
+The overall purpose, or goal of this analysis is to evaluate the potential of a machine learning model in making a prediction against the data set, specifically if an opportunity will be successful or fail.  Though there are plenty of external factors that can influence contract negotiations with a customer, the curiosity to explore is still necessary.  If there are any patterns that can be discovered or the identification of the most influential features would be helpful to know. This is the purpose of the analysis, to discover any insight no matter how small.
+```{r preprocessing, include=FALSE}
+#make a copy
+opportunity <- opportunity.raw
+#https://stackoverflow.com/questions/20345022/convert-a-data-frame-to-a-data-table-without-copy
+
+setDT(opportunity) #make it a data.table
+
+#need to change to factors, Quarter, Year, New State, Close State, Technology, Type
+opportunity$OppType <- as.factor(opportunity$OppType)
+opportunity$CustGblRegion <- as.factor(opportunity$CustGblRegion)
+opportunity$CustRegion <- as.factor(opportunity$CustRegion)
+opportunity$CustName <- as.factor(opportunity$CustName)
+opportunity$OppTechnology <- as.factor(opportunity$OppTechnology)
+opportunity$OppPrimeSalesRepName <- as.factor(opportunity$OppPrimeSalesRepName)
+opportunity$CustCoreSeg <- as.factor(opportunity$CustCoreSeg)
+opportunity$CustSubSeg <- as.factor(opportunity$CustSubSeg)
+opportunity$OppEstClsYR <- as.factor(opportunity$OppEstClsYR)
+opportunity$OppEstClsQtr <- as.factor(opportunity$OppEstClsQtr)
+opportunity$OppTypeNewState <- as.factor(opportunity$OppTypeNewState)
+opportunity$OppTypeJepState <- as.factor(opportunity$OppTypeJepState)
+opportunity$OppPrimeCompetitor <- as.factor(opportunity$OppPrimeCompetitor)
+opportunity$OppClosedState <- as.factor(opportunity$OppClosedState)
+opportunity$OppBPPlatform <- as.factor(opportunity$OppBPPlatform)
+opportunity$OppCurrency <- as.factor(opportunity$OppCurrency)
+opportunity$OppHighValueFlag <- as.factor(opportunity$OppHighValueFlag)
+opportunity$OppHighValueStatus <- as.factor(opportunity$OppHighValueStatus)
+opportunity$OppCreatedBy <- as.factor(opportunity$OppCreatedBy)
+opportunity$OppTypeSubCat <- as.factor(opportunity$OppTypeSubCat)
+
+
+#http://r.789695.n4.nabble.com/Read-quot-xlsx-quot-and-convert-date-column-value-into-Dataframe-td4710192.html
+#Read.xlsx messse up the DAte format and converts everything to PosIX time, simple formula below fixes it
+opportunity$OppCreateDate <- as.Date('1900-01-01')+opportunity$OppCreateDate-2
+opportunity$OppLastUpdateDate <- as.Date('1900-01-01')+opportunity$OppLastUpdateDate-2
+opportunity$OppClosedDate <- as.Date('1900-01-01')+opportunity$OppClosedDate-2
+opportunity$OppTypeJepDate <- as.Date('1900-01-01')+opportunity$OppTypeJepDate-2
+opportunity$OppTypeNewDate <- as.Date('1900-01-01')+opportunity$OppTypeNewDate-2
+opportunity$OppModifyDate <- as.Date('1900-01-01')+opportunity$OppModifyDate-2
+```
+
+# Exploratory Analysis
+```{r, echo=FALSE}
+knitr::kable(introduce(opportunity))
+```
+
+The data set contains 77 features and 13,097 samples. Of these samples, there appear to be two distinct categories around the Opportunities. They are 'New Business' and 'Jeopardy'. 
+
+```{r,echo=FALSE}
+plot_bar(opportunity$OppType)
+```
+
+There are also subcategories for OppType which state the results of the opportunity in relation to the OppType. These features are OppTypeNewState (for New Business) and  OppTypeJepState (for Jeopardy)
+```{r,echo=FALSE}
+plot_bar(opportunity[,OppTypeNewState])
+plot_bar(opportunity[,OppTypeJepState])
+```
+
+The creation dates (OppCreateDate) of each opportunity are also interesting. Though the earliest entry is in 2011, the concentration of opportunities entered into the CRM didn't rise untill 2015.
+
+```{r plot date, echo=FALSE}
+#https://stackoverflow.com/questions/14549433/count-rows-by-date
+library(data.table)
+dt <- as.data.table(opportunity$OppCreateDate)
+dt <- dt[,.N,by=V1]
+#https://www.statmethods.net/graphs/scatterplot.html
+plot(N ~ V1, dt, main="Opportunities over Time", xlab="Date", ylab="Count")
+```
+
+There is also a category around the Technology being requested to be used in the Opportunity and how a large number of opportunties rely on a certain key number of technologies.
+```{r,echo=FALSE}
+plot_bar(opportunity$OppTechnology)
+```
+
+# Data Preprocessing
+Being that the data set is a raw extract from a CRM system that was provided as an MS Excel file, there was a lot of preprocessing required to clean the data. This is different from much of the academic data sets that already are clean. Typical issues like empty fields, spaces in column names, incorrect data types and unnecessary columns were many of the hurdles in completing the analysis of this data set.
+
+
+
+Another aspect of the preprocessing is preparing the data for a specific Opportunity Type analysis. Earlier in EDA, it was discovered that New Business were the majority of the samples and we wish to refine the Machine Learning to focus on only New Business.
+
+```{r NewBusiness Split, echo=FALSE}
+#show to proportion
+temp <- prop.table(table(opportunity$OppType))
+knitr::kable(temp, caption = "Opportunity Types", col.names = c("Categories", "Proportion"))
+```
+
+```{r, include=FALSE}
+#https://stackoverflow.com/questions/7448676/how-to-identify-which-columns-are-not-na-per-row-in-a-matrix
+#we want to keep Opportunties that are not NA
+opportunity.NewBusiness <- opportunity %>% filter(OppType == "New Business")
+#and we'll store the rest as jeopardy
+#I prefere to deal with absolutes
+opportunity.Jepordy <- opportunity %>% filter(OppType != "New Business")
+```
+
+Also discovered during EDA is that New Business has 3 categories; Sold, Dead, and Active. Sold/Dead have Opportunity Close Dates, while Active are currently active opportunities where business is still being negotiated.
+
+Overall, the goal is to create a Random Forest model to develop a binary classification on whether the Active Opportunity will be Sold (positive) or Dead (negative).
+
+To accomplish this, new features need to be created based on calculations from the original data set. The Opportunities, since they are ordered by Date, should be treated as a Time Series dataset in which we need to start calculating different count of categories over time.
+
+This is accomplished with cumsum() or Cumulative Sum function within R. This was chosen over simple count because though the total measurements will be applied to the Active data, the Dead and Sold data should not be given future results when calculating the measurements.
+
+This is better explained by Sales Opportunity Risk Management, in which the more experience a Sales Rep has, the less risk an opportunity has to result in a Dead classifcation. But, untill the opportunity is closed and labeled, we cannot count its results in the measurement. This is the core use of Cumulative Sum.
+
+Other columns being measured with the grouping of Sold or Dead classifcations are Customer history, Competition history, Technology history, Customer Global Region and regular Region history, Customer Core Business Segment and Sub Business Segment history, and the Sales Rep history.
+
+
+```{r Culmaltive Sum, include=FALSE}
+#ALL THE SOLD as a Cumulative Sum
+opportunity.NewBusiness$cumsum <- ifelse(opportunity.NewBusiness$OppTypeNewState == "Sold", 1, 0)
+#Cumualtive Sum based on Sales Rep's Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppPrimeSalesRepName) %>% mutate(OppPrimeSalesRepSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Competitors Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppPrimeCompetitor) %>% mutate(OppPrimeCompetitorSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customer Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustName) %>% mutate(CustNameSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customers Region Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustRegion) %>% mutate(CustRegionSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Global Region Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustGblRegion) %>% mutate(CustGblRegionSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Technology Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppTechnology) %>% mutate(OppTechnologySoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customer Core Segment Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustCoreSeg) %>% mutate(CustCoreSegSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customers Sub Segment Sold
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustSubSeg) %>% mutate(CustSubSegSoldExpCount = cumsum(cumsum)) %>% data.frame() 
+
+
+
+#ALL THe DEAD
+#Cumualtive Sum of Sales Rep's Dead
+opportunity.NewBusiness$cumsum <- ifelse(opportunity.NewBusiness$OppTypeNewState == "Dead", 1, 0)
+#Cumualtive Sum based on Sales Rep's Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppPrimeSalesRepName) %>% mutate(OppPrimeSalesRepDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Competitors Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppPrimeCompetitor) %>% mutate(OppPrimeCompetitorDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customer Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustName) %>% mutate(CustNameDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customers Region Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustRegion) %>% mutate(CustRegionDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Global Region Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustGblRegion) %>% mutate(CustGblRegionDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Technology Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(OppTechnology) %>% mutate(OppTechnologyDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customer Core Segment Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustCoreSeg) %>% mutate(CustCoreSegDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+#Cumualtive Sum based on Customers Sub Segment Dead
+opportunity.NewBusiness <- opportunity.NewBusiness %>% arrange(OppClosedDate) %>% group_by(CustSubSeg) %>% mutate(CustSubSegDeadExpCount = cumsum(cumsum)) %>% data.frame() 
+
+
+#Clean up by Removing CumSum now that it is nolonger needed
+opportunity.NewBusiness <- opportunity.NewBusiness %>% select(-cumsum)
+
+```
+
+Another calucation towards Risk is the duration of the Opportunity remaining open. The longer an opportunity takes to conclude, the larger the chance it has to reach a Dead classification. However, it was discovered that some of the Opportunties were backdated which is an issue that will be discussed in Data Refinement section.
+
+```{r Measure Duration, include=FALSE}
+#THIS WILL NEVER WORK because Creaters are backdating information, too many negative durations
+
+
+#need to count days since Created and close, to help score, since the older the opportunity, the higher the risk
+#if active compare created against 05/14/2018, date the flat file was recieved. 
+#store a static date on rows that have OppClosedDate
+opportunity.NewBusiness$OppClosedDate[is.na(opportunity.NewBusiness$OppClosedDate)] <- as.Date("2018-05-14")
+#measure the duration in days
+#opportunity$OppDurration <- opportunity$OppClosedDate - opportunity$OppCreateDate
+#https://stackoverflow.com/questions/37056201/r-rounding-with-difftime-function
+opportunity.NewBusiness$OppDurration <- round(difftime(opportunity.NewBusiness$OppClosedDate, opportunity.NewBusiness$OppCreateDate, units = "days"), 0)
+
+#https://plot.ly/ggplot2/box-plots/
+ggplot(opportunity.NewBusiness, aes(x=OppTypeNewState, y=OppDurration, fill=OppTypeNewState)) + geom_boxplot()
+```
+
+
+# Data Refinement
+Now that Preprocessing of data has been completed, there is still some refinement on the data that is required.  The creation of Duration highlighted a missed discovery in EDA that would have shown an issue of Back Dating. Back Dating is the creation of an Opportunity AFTER the results are known. This causes the CloseDate to be Older than the CreateDate which results in negative durations being calculated.  Overall, 3.7% of all Opportunities had a negative duration.
+
+```{r Negative Duration, echo=FALSE}
+temp <- prop.table(opportunity.NewBusiness %>% summarise(Postitive = sum(OppDurration>0), Negative = sum(OppDurration<0)))
+
+knitr::kable(temp, caption = "Opportunity Duration")
+```
+
+Based on that small amounta solution was devised to replace the negative durations with a Mean Duration so as not lose the other features related to those samples.  The mean duration turned out to be 282 days.
+
+```{r Mean Duration, include=FALSE}
+#well isn't too bad, 401 fo 10830 are negative
+
+#need to replace the negative Durations with a Mean value
+#https://www.r-bloggers.com/using-r-quickly-calculating-summary-statistics-with-dplyr/
+temp <-summarise(opportunity.NewBusiness, mean=mean(OppDurration))
+#round to the nearest day
+temp <- round(temp$mean)
+#now replace the negative durations with the mean duration
+#https://stackoverflow.com/questions/28013850/change-value-of-variable-with-dplyr
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(OppDurration=replace(OppDurration, OppDurration < 0, temp))
+
+```
+
+There was also the issue of missing values peppered across the data set. This had to be handled differently because the missing values were mostly around the categorical data like labeling of Region. 
+
+Columns with missing data were expected since there individual columns were directly related to New Business or Jeopardy categories of OppType. Then there were columns related to if the Opportunity was successful in winning the business or not and the actual profits made on successful Opportunities. These columns could be ignored as they would not be used in the prediction. Other columns though were labeled as important for the Random Forest and needed to have the missing values fixed.  
+
+Below is the actual missing data directly related to New Business and identified as being of benefit for the Machine Learning model.
+
+```{r Fix NA, echo=FALSE}
+#with Duration found back dating and filled wiht mean values, there are other rows with missing data
+#crutial to address missing data before ML
+#https://www.r-bloggers.com/how-to-perform-a-logistic-regression-in-r/
+#view Missing Data
+
+#key columns
+columns <- c("CustGblRegion","OppTechnology", "CustCoreSeg", "OppEstClsYR", "OppEstClsQtr", "OppEstAnnSales", "OppEstClsYrsSales", "OppEstCOSales", "OppClosedDate", "OppEstAnnPctProfits", "OppEstClsYrSalesUSD", "OppEstCOSalesUSD", "OppEstTotalSalesUSD", "OppCurrency", "OppHighValueFlag", "OppHighValueStatus", "OppCreateDate", "OppPrimeSalesRepSoldExpCount", "OppPrimeCompetitorSoldExpCount", "CustNameSoldExpCount", "CustRegionSoldExpCount", "CustGblRegionSoldExpCount", "OppTechnologySoldExpCount", "CustCoreSegSoldExpCount", "OppPrimeSalesRepDeadExpCount", "OppPrimeCompetitorDeadExpCount", "CustNameDeadExpCount", "CustRegionDeadExpCount", "CustGblRegionDeadExpCount", "OppTechnologyDeadExpCount", "CustCoreSegDeadExpCount", "OppDurration", "OppTypeNewState")
+
+#missmap(opportunity.NewBusiness, main = "Missing values vs observed")
+plot_missing(opportunity.NewBusiness %>% select(columns))
+```
+
+
+```{r, include=FALSE}
+#columns found with a few (<5%) missing values and useful ML
+nacolumns <- c("CustSubSeg", "OppEstClsYR", "OppEstCOSales", "OppEstCOSalesUSD", "OppHighValueStatus")
+
+#Factors, picked the Max occuring value
+#max value
+temp <- as.data.frame(table(opportunity.NewBusiness$CustSubSeg)) %>% filter(Freq == max(Freq)) %>% select(Var1)
+#apply temp
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(CustSubSeg=replace(CustSubSeg, is.na(CustSubSeg), temp$Var1))
+
+#max value
+temp <- as.data.frame(table(opportunity.NewBusiness$OppHighValueStatus)) %>% filter(Freq == max(Freq)) %>% select(Var1)
+#Apply temp
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(OppHighValueStatus=replace(OppHighValueStatus, is.na(OppHighValueStatus), temp$Var1))
+
+#OppEstClsYR is a factor but there is extra data in other columns base it off of, this is the estimated year the Opp would Close. So the actual close date
+#turns out all the CloseDates for the NAs of OppEstClsYear are 2014, and are all label SOLD, and were all for the same customer..
+#opportunity.NewBusiness %>% filter(is.na(OppEstClsYR)) %>% mutate(OppEstClsYR2=format(OppClosedDate, '%Y')) %>% select(OppEstClsYR2, OppClosedDate)
+#But earliest Estimate in OppEstClsYR is 2015, which is the earliest so the first row
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(OppEstClsYR=replace(OppEstClsYR, is.na(OppEstClsYR), as.character(as.data.frame(table(opportunity.NewBusiness$OppEstClsYR))[1,"Var1"])))
+
+
+
+#Numbers, picked the mean
+#But can't pick a mean if NA values, so filter
+#for Opportunity Estimates Close Out Sales $$
+temp <-opportunity.NewBusiness %>% filter(!is.na(OppEstCOSales)) %>%summarise(mean=mean(OppEstCOSales))
+#now store it
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(OppEstCOSales=replace(OppEstCOSales, is.na(OppEstCOSales), temp$mean))
+
+temp <-opportunity.NewBusiness %>% filter(!is.na(OppEstCOSalesUSD)) %>%summarise(mean=mean(OppEstCOSalesUSD))
+#now store it
+opportunity.NewBusiness <- opportunity.NewBusiness %>% mutate(OppEstCOSalesUSD=replace(OppEstCOSalesUSD, is.na(OppEstCOSalesUSD), temp$mean))
+```
+
+
+```{r, include=FALSE}
+#key columns
+columns <- c("CustGblRegion","OppTechnology", "CustName", "CustCoreSeg", "OppEstClsYR", "OppEstClsQtr", "OppEstAnnSales", "OppEstClsYrsSales", "OppEstCOSales", "OppClosedDate", "OppEstAnnPctProfits", "OppEstClsYrSalesUSD", "OppEstCOSalesUSD", "OppEstTotalSalesUSD", "OppCurrency", "OppHighValueFlag", "OppHighValueStatus", "OppCreateDate", "OppTypeNewState")
+plot_boxplot(opportunity.NewBusiness %>% select(columns), by = "OppTypeNewState")
+```
+
+
+# Machine Learning
+After the Cumulative Sum, Opportunity Duration analysis and cleaning up  missing values (NAs), it was time to focus on the New Business data. Currently the data of New Business is split with 44.6% Sold, 30.1% Dead, and 25.2% still active.
+
+```{r NewBusiness Labels, echo=FALSE}
+temp <- prop.table(table(opportunity.NewBusiness$OppTypeNewState))
+knitr::kable(temp, caption = "Opportunity Classifications", col.names = c("Categories", "Proportion"))
+```
+
+For the purpose of the Random Forest modeling, the Active and !Active (Sold or Dead) classifcation data types will need to be separated so the Random Forest model can be created on the !Active.
+
+```{r Data Split, include=FALSE}
+#https://stackoverflow.com/questions/7448676/how-to-identify-which-columns-are-not-na-per-row-in-a-matrix
+#we want to keep Opportunties Opportunites that are currently Active
+opportunity.Active <- opportunity.NewBusiness %>% filter(OppTypeNewState == 'Active')
+#In History we'll store everything not Active (I like to deal in absolutes)
+opportunity.History <- opportunity.NewBusiness %>% filter(!(OppTypeNewState == 'Active'))
+
+#after the seperation need to reindex the Factor for OppTypeNewState
+opportunity.Active$OppTypeNewState <- factor(opportunity.Active$OppTypeNewState)
+opportunity.History$OppTypeNewState <- factor(opportunity.History$OppTypeNewState)
+```
+
+
+To conduct a Machine Learning (ML) model, the data set for History must be split into Training and Test datasets. A ratio 70:30 for Train and Test was selected. Exploring the data, features that were numeric or categorical were selected to be used for the ML model. Some categorical data was dropped due to the size of the options, but the Cumulative Sum measurements created from those categories were retained. In the end, 33 of the 94 Columns were selected.
+
+```{r Train/Test, include=FALSE}
+#need to reduce down to key columns (non char based) for ML to use. 
+#so what columns...
+columns <- c("CustGblRegion","OppTechnology", "CustCoreSeg", "OppEstClsYR", "OppEstClsQtr", "OppEstAnnSales", "OppEstClsYrsSales", "OppEstCOSales", "OppClosedDate", "OppEstAnnPctProfits", "OppEstClsYrSalesUSD", "OppEstCOSalesUSD", "OppEstTotalSalesUSD", "OppCurrency", "OppHighValueFlag", "OppHighValueStatus", "OppCreateDate", "OppPrimeSalesRepSoldExpCount", "OppPrimeCompetitorSoldExpCount", "CustNameSoldExpCount", "CustRegionSoldExpCount", "CustGblRegionSoldExpCount", "OppTechnologySoldExpCount", "CustCoreSegSoldExpCount", "OppPrimeSalesRepDeadExpCount", "OppPrimeCompetitorDeadExpCount", "CustNameDeadExpCount", "CustRegionDeadExpCount", "CustGblRegionDeadExpCount", "OppTechnologyDeadExpCount", "CustCoreSegDeadExpCount", "OppDurration", "OppTypeNewState")
+
+#setup Train and Test with a 70:30 ratio
+#Caret library has a nice createDataPartition that creates sample based on a column that is random but so that sampling isn't onesided (train has a higher ratio of Solds than Test)
+#https://stackoverflow.com/questions/35718350/train-test-split-in-rs-caret-package
+temp <- createDataPartition(opportunity.History$OppTypeNewState, p = 0.7, list=FALSE)
+#setup train/test
+opportunity.train <- opportunity.History[temp,columns]
+opportunity.test <- opportunity.History[-temp,columns]
+```
+
+The createDataParition (), from caret library, breaks the original data set into an equal share of Sold's and Dead's based on the label OppTypeNewState. The reason for this is that any improvement or detrimental of sales techniques over time should not be an influence on the model.
+
+```{r Train vs Test, echo=FALSE}
+temp <- prop.table(table(opportunity.train$OppTypeNewState))
+knitr::kable(temp, caption = "Training Classification", col.names = c("Categories", "Proportion"))
+temp <- prop.table(table(opportunity.test$OppTypeNewState))
+knitr::kable(temp, caption = "Testing Classification", col.names = c("Categories", "Proportion"))
+```
+
+# Machine Learning Results
+```{r Random Forest, echo=FALSE}
+#Random Forest Model to predict Sold/Dead
+#https://www.r-bloggers.com/random-forests-in-r/
+#https://www.r-bloggers.com/random-forest-classification-of-mushrooms/
+#using 100 Trees, run a Random Forest model against the Train dataset
+rfmodel <- randomForest(OppTypeNewState ~ ., ntree = 100, data = opportunity.train)
+#apply RF on test data
+opportunity.predict.RF = predict(rfmodel, opportunity.test)
+#print out a confusion Matrix on the Prediction from the model against the Test dataset
+print(confusionMatrix(data = opportunity.predict.RF,  
+                  reference = opportunity.test$OppTypeNewState,
+                  positive = 'Sold'))
+```
+
+93% accuracy! This was not originally expected to be doable since it was theorized that there were too many external influences on the success or failure of opportunities to be contained in this data set. External markets fluctuations, production changes, and competition were never made available in the dataset.
+
+```{r Plot RF, echo=FALSE}
+plot(rfmodel)
+```
+
+From the plot above, we can see that after 20 trees, there is no longer a dramatic reduction in error, but there is still a gradual descent.  
+
+```{r VarImportance Plot, echo=FALSE}
+#Variable of Importance
+varImpPlot(rfmodel,  
+           sort = T,
+           n.var=10,
+           main="Top 10 - Variable Importance")
+```
+
+The Top 10 Variable Importance based on the model highlights how much the Cumulative Sum measurements came into play. The main variables were the Customer's Sold and Dead experience scores which were unexpected. Initially, it was hypothesized that the Sales Rep would have the most influence on the outcome.
+
+Another point of interest is that though it was pricted that the Duration of the Opportunity would have a high influence on the model, the Create Date of the Opportunity did as well. Customer Core Business Segment had a high influence, which was expected but not the Region grouping of Dead opportunities.
+
+Last in the Top 10 were around the competition, which was expected.
+
+```{r VarImportance Table, include=FALSE}
+var.imp = data.frame(importance(rfmodel,  
+                                type=2))
+# make row names as columns
+var.imp$Variables = row.names(var.imp)  
+print(var.imp[order(var.imp$MeanDecreaseGini,decreasing = T),])
+```
+
+# Conclusion
+The ML model did better than expected at being able to provide a prediction towards New Business Opportunities. There was concern about the undocumented or unmeasured external influences that factor into predicting the Opportunity classifcation. 
+
+Though not stated originally, the extraction of the CRM system data was provided on 05/19/2018. In a few months' time, some of the Active Opportunities should close out and it will be interesting to see how well the model works outside the Train/Test workspace. 
+
+# Summary
+The Random Forest Machine Learning Supervised model worked exceptionally well in creating a Binary Classifier.  The results were enhanced by the addition of calculated features off the Time Series data set which were created by Cumulative Sum based on this historical Opportunity results.
+
+# References
+http://www.inflexion-point.com/blog/why-every-sales-opportunity-needs-a-regular-opportunity-risk-assessment
+
+https://www.r-bloggers.com/random-forests-in-r/
+
+https://www.r-bloggers.com/random-forest-classification-of-mushrooms/
